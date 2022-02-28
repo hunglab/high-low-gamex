@@ -1,5 +1,15 @@
-import { Box, Flex, Center, Heading, Button, Stack } from "@chakra-ui/react";
+import {
+  Box,
+  Flex,
+  Center,
+  Heading,
+  Button,
+  Stack,
+  Text,
+} from "@chakra-ui/react";
 import { RiArrowDownSLine, RiArrowUpSLine } from "react-icons/ri";
+import { useMachine } from "@xstate/react";
+import { createMachine, interpret, assign } from "xstate";
 
 /*
 ## Requirements:
@@ -27,7 +37,159 @@ import { RiArrowDownSLine, RiArrowUpSLine } from "react-icons/ri";
   - Complete the code with XState
   - document：https://xstate.js.org/docs/
 */
+
+type Context = {
+  count: number;
+  text_a?: any;
+  text_b?: any;
+  win?: any;
+  chosen_number?: number;
+};
+
+const gameMachine =
+  /** @xstate-layout N4IgpgJg5mDOIC5RQIYFswDoCWA7FAxgC7YBuYAxAMoAqAggEo2KgAOA9rNie7iyAA9EARgAcAFkwBOCQGYA7ADZlAJmGzRAGhABPEVMXSpx44oWKArAAYVAX1vbUGTIRLlMsImFbCKAYQAJAHkgqgBRAIBJAHEA-g4uHj4kQURxUStpOXlhHNFhKXkLRW09BHE1IxNFFSVRRSl7R3QsVzIsT29fQJDwgBkggHV4zm5sXn4hcoys8QVcsQKikt1EWWEVTCttndrxeQPippAnVuJ2jy9WFQo6aLpIgDkRxPHk0CmLFU2LdZVZRRWKQA8TCFZlMFSKqmbYqIHCdL2BwgXDsCBwfinHD4c7kF5jCYpKYVUqIb7CaEyMz5eTrY5YtruTo+fFJSZrWSSGRzIoqUT8hQWUkIcmU+oaXKyKwWektFy4jpXFSst7shCWWSYHniAxSCwbYQFYWyWRQnUmKS1X7bcSy5yMsAqwkfNbCTLcwV8gVFYUGMXbN3iCzyW3I05O96pBBiYUqUP2IA */
+  createMachine<Context>(
+    {
+      context: {
+        count: 0,
+        text_a: 0,
+        text_b: 0,
+        win: 0,
+        chosen_number: 0,
+      },
+      id: "game",
+      initial: "inactive",
+      states: {
+        inactive: {
+          on: {
+            START: {
+              actions: "start",
+              target: "#game.active.step1",
+            },
+          },
+        },
+        active: {
+          initial: "step1",
+          states: {
+            step1: {
+              on: {
+                CHOOSEHIGH: {
+                  actions: ["choose_high", "win"],
+                  target: "#game.active.step2",
+                },
+                CHOOSELOW: {
+                  actions: ["choose_low", "win"],
+                  target: "#game.active.step2",
+                },
+              },
+            },
+            step2: {
+              on: {
+                AGAIN: {
+                  actions: ["random", "reset"],
+                  target: "#game.active.step1",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      actions: {
+        start: assign({
+          text_a: (context) => Math.floor(Math.random() * (10 - 1 + 1)) + 1,
+          text_b: (context) => Math.floor(Math.random() * (10 - 1 + 1)) + 1,
+        }),
+        choose_high: assign({
+          chosen_number: (context) => 1,
+        }),
+        choose_low: assign({
+          chosen_number: (context) => 0,
+        }),
+        reset: assign({
+          text_a: (context) => Math.floor(Math.random() * (10 - 1 + 1)) + 1,
+          text_b: (context) => Math.floor(Math.random() * (10 - 1 + 1)) + 1,
+          chosen_number: (context) => 0,
+          win: (context) => 0,
+        }),
+        win: assign({
+          // - When B > A and user chose `Higher`，the game result is WIN
+          // - When B > A and user chose `Lower`，the game result is LOSE
+          // - When B < A and user chose `Higher`，the game result is LOSE
+          // - When B < A and user chose `Lower`，the game result is WIN
+          // - When B = A and user chose `Higher`，the game result is LOSE
+          // - When B = A and user chose `Lower`，the game result is LOSE
+
+          win: (context) => {
+            if (
+              context.text_b - context.text_a > 0 &&
+              context.chosen_number == 1
+            ) {
+              return 1;
+            } else if (
+              context.text_b - context.text_a > 0 &&
+              context.chosen_number == 0
+            ) {
+              return 0;
+            } else if (
+              context.text_b - context.text_a < 0 &&
+              context.chosen_number == 1
+            ) {
+              return 0;
+            } else if (
+              context.text_b - context.text_a < 0 &&
+              context.chosen_number == 0
+            ) {
+              return 1;
+            } else if (context.text_b - context.text_a == 0) {
+              return 0;
+            }
+          },
+        }),
+      },
+    }
+  );
+
+const counterService = interpret(gameMachine)
+  .onTransition((state) => console.log(state.context.text_a))
+  .start();
+
+const ChooseValueButton = () => {
+  return (
+    <>
+      <Flex>
+        <Button
+          mt="32px"
+          colorScheme="twitter"
+          leftIcon={<RiArrowUpSLine />}
+          isFullWidth>
+          Higher
+        </Button>
+        <Button
+          mt="8px"
+          colorScheme="facebook"
+          leftIcon={<RiArrowDownSLine />}
+          isFullWidth>
+          Lower
+        </Button>
+      </Flex>
+    </>
+  );
+};
+
 const App = () => {
+  const [current, send] = useMachine(gameMachine);
+  const active = current.matches("active");
+  const inactive = current.matches("inactive");
+  const step1 = current.matches("active.step1");
+  const step2 = current.matches("active.step2");
+  const { count } = current.context;
+  const { text_a } = current.context;
+  const { text_b } = current.context;
+  const { chosen_number } = current.context;
+  const { win } = current.context;
+
   return (
     <Box bgColor="#f3f3f3" h="100vh">
       <Center pt="120px">
@@ -50,10 +212,9 @@ const App = () => {
                 bgColor="white"
                 borderRadius="md"
                 boxShadow="lg"
-                flex={1}
-              >
+                flex={1}>
                 <Heading fontSize="54px" color="gray.500">
-                  ?
+                  {inactive ? "?" : text_a}
                 </Heading>
               </Center>
             </Flex>
@@ -65,30 +226,33 @@ const App = () => {
                 py="16px"
                 bgColor="white"
                 borderRadius="md"
-                boxShadow="lg"
-              >
+                boxShadow="lg">
                 <Heading fontSize="54px" color="blue.500">
-                  ?
+                  {inactive ? "?" : step2 ? text_b : "?"}
                 </Heading>
               </Center>
-
-              {/* `Higher` and `Lower` buttons UI */}
-              {/* <Button
+              <Button
                 mt="32px"
                 colorScheme="twitter"
+                display={step1 ? "flex" : "none"}
                 leftIcon={<RiArrowUpSLine />}
-                isFullWidth
-              >
+                onClick={() => {
+                  send("CHOOSEHIGH");
+                }}
+                isFullWidth>
                 Higher
               </Button>
               <Button
                 mt="8px"
                 colorScheme="facebook"
+                display={step1 ? "flex" : "none"}
                 leftIcon={<RiArrowDownSLine />}
-                isFullWidth
-              >
+                onClick={() => {
+                  send("CHOOSELOW");
+                }}
+                isFullWidth>
                 Lower
-              </Button> */}
+              </Button>
             </Flex>
           </Flex>
 
@@ -96,31 +260,36 @@ const App = () => {
             <Button
               colorScheme="blue"
               onClick={() => {
-                // TODO: Start a new game
+                send("START");
               }}
-            >
+              display={active ? "none" : "flex"}>
               Start Game
             </Button>
           </Box>
 
           {/* Game result UI */}
-          {/* <Stack mt="24px" spacing="16px">
-            <Heading color="twitter.300" align="center">
+          <Stack mt="24px" spacing="16px" display={step2 ? "flex" : "none"}>
+            <Heading
+              color="twitter.300"
+              align="center"
+              display={win > 0 ? "flex" : "none"}>
               WIN!
             </Heading>
-            <Heading color="red.300" align="center">
+            <Heading
+              color="red.300"
+              align="center"
+              display={win <= 0 ? "flex" : "none"}>
               LOSE!
             </Heading>
 
             <Button
               colorScheme="blue"
               onClick={() => {
-                // TODO: Clear game result and start a new game
-              }}
-            >
+                send("AGAIN");
+              }}>
               Play Again
             </Button>
-          </Stack> */}
+          </Stack>
         </Flex>
       </Center>
     </Box>
